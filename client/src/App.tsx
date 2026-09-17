@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import Editor from "@monaco-editor/react";
 
 function App() {
   const socketRef = useRef<WebSocket | null>(null);
 
-  const [message, setMessage] = useState("")
-  const [messages, setMessages] = useState<string[]>([]);
+  const [code, setCode] = useState(
+    `function hello() {
+      console.log("Hello, Converge!");
+    }`
+  );
+
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -13,21 +18,14 @@ function App() {
     socketRef.current = socket;
 
     socket.onopen = () => {
-      console.log("Connected to server");
       setConnected(true)
     }
 
     socket.onmessage = (event) => {
-      console.log("Received: ", event.data);
-
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        event.data,
-      ]);
+      setCode(event.data)
     };
 
     socket.onclose = () => {
-      console.log("Disconnected from server");
       setConnected(false);
     };
 
@@ -36,17 +34,16 @@ function App() {
     };
   }, []);
 
-  function sendMessage() {
-    if (!socketRef.current) {
+  function handleCodeChange(value: string | undefined) {
+    if (value === undefined) {
       return;
     }
 
-    if (socketRef.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
+    setCode(value);
 
-    socketRef.current.send(message);
-    setMessage("");
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(value);
+    }
   }
 
   return (
@@ -55,21 +52,12 @@ function App() {
         Status: {connected ? "Connected" : "Disconnected"}
       </p>
 
-      <input
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-        placeholder="Enter a message"
+      <Editor
+        height="80vh"
+        language="javascript"
+        value={code}
+        onChange={handleCodeChange}
       />
-
-      <button onClick={sendMessage}>
-        Send
-      </button>
-
-      <h2>Messages</h2>
-
-      {messages.map((msg, index) => (
-        <p key={index}>{msg}</p>
-      ))}
     </main>
   );
 }

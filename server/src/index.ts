@@ -1,4 +1,4 @@
-import { WebSocketServer } from "ws";
+import Websocket, { WebSocketServer } from "ws";
 
 const wss = new WebSocketServer({
     port: 8080,
@@ -13,7 +13,11 @@ wss.on("connection", (socket) => {
         console.log("Received:", message);
 
         for (const client of wss.clients) {
-            client.send(message);
+            if (client !== socket &&
+                client.readyState === Websocket.OPEN
+            ) {
+                client.send(message);
+            }
         }
     });
 
