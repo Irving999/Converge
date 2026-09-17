@@ -12,7 +12,9 @@ wss.on("connection", (socket) => {
 
         console.log("Received:", message);
 
-        socket.send(`Server received: ${message}`);
+        for (const client of wss.clients) {
+            client.send(message);
+        }
     });
 
     socket.on("close", () => {
