@@ -8,15 +8,11 @@ wss.on("connection", (socket) => {
     console.log("Client connected");
 
     socket.on("message", (data) => {
-        const message = data.toString();
-
-        console.log("Received:", message);
-
         for (const client of wss.clients) {
             if (client !== socket &&
                 client.readyState === Websocket.OPEN
             ) {
-                client.send(message);
+                client.send(data);
             }
         }
     });

@@ -1,63 +1,69 @@
 import { useEffect, useRef, useState } from "react";
-import Editor from "@monaco-editor/react";
+import * as Y from "yjs";
 
 function App() {
   const socketRef = useRef<WebSocket | null>(null);
+  const docRef = useRef<Y.Doc | null>(null);
 
-  const [code, setCode] = useState(
-    `function hello() {
-      console.log("Hello, Converge!");
-    }`
-  );
-
-  const [connected, setConnected] = useState(false);
+  const [text, setText] = useState("");
 
   useEffect(() => {
+    const doc = new Y.Doc();
+    const yText = doc.getText("code");
+
+    docRef.current = doc;
+
     const socket = new WebSocket("ws://localhost:8080");
+
+    socket.binaryType = "arraybuffer";
 
     socketRef.current = socket;
 
-    socket.onopen = () => {
-      setConnected(true)
-    }
+    doc.on("update", (update, origin) => {
+      if (origin === "remote") {
+        return;
+      }
+
+      if (socket.readyState === WebSocket.OPEN) {
+        const message = new Uint8Array(update.byteLength);
+        message.set(update);
+        socket.send(message);
+      }
+    });
 
     socket.onmessage = (event) => {
-      setCode(event.data)
+      const update = new Uint8Array(event.data);
+      
+      Y.applyUpdate(doc, update, "remote");
     };
 
-    socket.onclose = () => {
-      setConnected(false);
-    };
+    yText.observe(() => {
+      setText(yText.toString());
+    })
 
     return () => {
       socket.close();
-    };
+      doc.destroy();
+    }
   }, []);
 
-  function handleCodeChange(value: string | undefined) {
-    if (value === undefined) {
+  function addHello() {
+    const doc = docRef.current;
+
+    if (!doc) {
       return;
     }
 
-    setCode(value);
-
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(value);
-    }
+    const yText = doc.getText("code");
+    
+    yText.insert(yText.length, "hello");
   }
 
   return (
     <main>
-      <p>
-        Status: {connected ? "Connected" : "Disconnected"}
-      </p>
-
-      <Editor
-        height="80vh"
-        language="javascript"
-        value={code}
-        onChange={handleCodeChange}
-      />
+      <button onClick={addHello}>
+        Add hello
+      </button>
     </main>
   );
 }
