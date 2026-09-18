@@ -33,7 +33,7 @@ function App() {
 
     socket.onmessage = (event) => {
       const update = new Uint8Array(event.data);
-      
+
       Y.applyUpdate(doc, update, "remote");
     };
 
@@ -64,6 +64,7 @@ function App() {
       <button onClick={addHello}>
         Add hello
       </button>
+      <p>{text}</p>
     </main>
   );
 }
