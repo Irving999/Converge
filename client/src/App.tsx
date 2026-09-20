@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from "react";
+import Editor from "@monaco-editor/react";
+import { editor } from "monaco-editor";
+
 import * as Y from "yjs";
+import { MonacoBinding } from "y-monaco";
 
 function App() {
   const socketRef = useRef<WebSocket | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
 
-  const [text, setText] = useState("");
+  const [editorInstance, setEditorInstance] =
+    useState<editor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
     const doc = new Y.Doc();
-    const yText = doc.getText("code");
 
     docRef.current = doc;
 
@@ -37,34 +41,47 @@ function App() {
       Y.applyUpdate(doc, update, "remote");
     };
 
-    yText.observe(() => {
-      setText(yText.toString());
-    })
-
     return () => {
       socket.close();
       doc.destroy();
-    }
+    };
   }, []);
 
-  function addHello() {
-    const doc = docRef.current;
-
-    if (!doc) {
+  useEffect(() => {
+    if (!editorInstance || !docRef.current) {
       return;
     }
 
-    const yText = doc.getText("code");
-    
-    yText.insert(yText.length, "hello");
-  }
+    const model = editorInstance.getModel();
+
+    if (!model) {
+      return;
+    }
+
+    const yText = docRef.current.getText("code");
+
+    const binding = new MonacoBinding(
+      yText,
+      model,
+      new Set([editorInstance])
+    );
+
+    return () => {
+      binding.destroy();
+    };
+  }, [editorInstance]);
 
   return (
     <main>
-      <button onClick={addHello}>
-        Add hello
-      </button>
-      <p>{text}</p>
+      <Editor
+        height="80vh"
+        language="typescript"
+        theme="vs-dark"
+        defaultValue=""
+        onMount={(editor) => {
+          setEditorInstance(editor);
+        }}
+      />
     </main>
   );
 }
