@@ -38,7 +38,13 @@ function App() {
       color: "#ff0000",
     });
 
-    const socket = new WebSocket("ws://localhost:8080?room=demo");
+    const roomID = 
+      new URLSearchParams(window.location.search).get("room") ?? "demo";
+
+    const socket = new WebSocket(
+      `ws:localhost:8080?room=${encodeURIComponent(roomID)}`
+    )
+
     socket.binaryType = "arraybuffer";
     socketRef.current = socket;
 
