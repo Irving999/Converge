@@ -109,3 +109,12 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.yRemoteSelection {
+  background: rgba(255, 82, 82, 0.28);
+}
+
+.yRemoteSelectionHead {
+  border: 1px solid #ff5252;
+  margin-left: -1px;
+}
