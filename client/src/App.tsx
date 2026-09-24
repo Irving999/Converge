@@ -33,16 +33,46 @@ function App() {
     docRef.current = doc;
     awarenessRef.current = awareness;
 
+    const params = new URLSearchParams(window.location.search);
+
+    const roomID = params.get("room") ?? "demo";
+    const name = params.get("name") ?? "Anonymous";
+    const userColor = params.get("color") ?? "#ff0000";
+
     awareness.setLocalStateField("user", {
-      name: "Alice",
-      color: "#ff0000",
+      name,
+      color: userColor,
     });
 
-    const roomID = 
-      new URLSearchParams(window.location.search).get("room") ?? "demo";
+    const awarenessStyles = document.createElement("style");
+    document.head.appendChild(awarenessStyles);
+
+    const updateAwarenessStyles = () => {
+      const rules = [...awareness.getStates()]
+        .filter(([clientID]) => clientID !== awareness.clientID)
+        .map(([clientID, state]) => {
+          const color = state.user.color;
+
+          return `
+            .yRemoteSelection-${clientID} {
+              background: ${color}40;
+            }
+
+            .yRemoteSelectionHead-${clientID} {
+              border-color: ${color};
+            }
+          `;
+        })
+        .join("");
+
+      awarenessStyles.textContent = rules;
+    }
+
+    awareness.on("update", updateAwarenessStyles);
+    updateAwarenessStyles();
 
     const socket = new WebSocket(
-      `ws:localhost:8080?room=${encodeURIComponent(roomID)}`
+      `ws://localhost:8080?room=${encodeURIComponent(roomID)}`
     )
 
     socket.binaryType = "arraybuffer";
@@ -101,6 +131,8 @@ function App() {
     };
 
     return () => {
+      awareness.off("update", updateAwarenessStyles);
+      awarenessStyles.remove();
       socket.close();
       doc.destroy();
     };
