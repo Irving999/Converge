@@ -12,30 +12,27 @@ import * as Y from "yjs";
 const DOCUMENT_UPDATE = 0;
 const AWARENESS_UPDATE = 1;
 
-async function startServer() {
-    await pool.query("SELECT 1");
-    console.log("Database connected");
+type Room = {
+    doc: Y.Doc;
+    awareness: Awareness;
+};
 
+type AwarenessChange = {
+    added: number[];
+    updated: number[];
+    removed: number[];
+};
+
+const rooms = new Map<string, Room>();
+const clientRooms = new Map<Websocket, string>();
+const socketAwarenessIDs = new Map<Websocket, Set<number>>();
+
+async function startServer() {
     const wss = new WebSocketServer({
         port: 8080,
     });
 
-    type Room = {
-        doc: Y.Doc;
-        awareness: Awareness;
-    };
-
-    type AwarenessChange = {
-        added: number[];
-        updated: number[];
-        removed: number[];
-    };
-
-    const rooms =  new Map<string, Room>();
-    const clientRooms = new Map<Websocket, string>();
-    const socketAwarenessIDs = new Map<Websocket, Set<number>>();
-
-    wss.on("connection", (socket, request) => {
+    wss.on("connection", async (socket, request) => {
         console.log("Client connected");
 
         const url = new URL(
@@ -44,7 +41,7 @@ async function startServer() {
         );
 
         const roomID = String(url.searchParams.get("room"));
-        const room = getRoom(roomID);
+        const room = await getRoom(roomID);
         const serverDoc = room.doc;
 
         clientRooms.set(socket, roomID);
@@ -90,13 +87,19 @@ async function startServer() {
             );
         }
 
-        socket.on("message", (data) => {
+        socket.on("message", async (data) => {
             const message = new Uint8Array(data as Buffer);
             const type = message[0];
             const update = message.slice(1);
 
             if (type === DOCUMENT_UPDATE) {
-                Y.applyUpdate(serverDoc, update);
+                try {
+                    await insertUpdate(roomID, update);
+                    Y.applyUpdate(serverDoc, update);
+                } catch (error) {
+                    console.error("Failed to save document changes", error);
+                    return;
+                }
             }
 
             if (type === AWARENESS_UPDATE) {
@@ -147,32 +150,72 @@ async function startServer() {
         });
     });
 
-    function getRoom(roomID: string) {
-        let room = rooms.get(roomID);
-
-        if (!room) {
-            const doc = new Y.Doc();
-            room = {
-                doc,
-                awareness: new Awareness(doc),
-            }
-
-            rooms.set(roomID, room);
-        }
-
-        return room;
-    }
-
-    function frameMessage(type: number, update: Uint8Array) {
-        const message = new Uint8Array(update.byteLength + 1);
-
-        message[0] = type;
-        message.set(update, 1);
-
-        return message;
-    }
-
     console.log("Server running on ws://localhost:8080");
+}
+
+async function getRoom(roomID: string): Promise<Room> {
+    const existingRoom = rooms.get(roomID);
+
+    if (existingRoom) {
+        return existingRoom;
+    }
+
+    await ensureRoomExists(roomID);
+
+    const doc = new Y.Doc();
+
+    const result = await pool.query<{ update_data: Buffer }>(
+        `
+          SELECT update_data
+          FROM document_updates
+          WHERE room_id = $1
+          ORDER BY id ASC 
+        `,
+        [roomID],
+    );
+
+    for (const row of result.rows) {
+        Y.applyUpdate(doc, new Uint8Array(row.update_data), "database");
+    }
+
+    const room = {
+        doc,
+        awareness: new Awareness(doc),
+    }
+
+    rooms.set(roomID, room);
+
+    return room;
+}
+
+function frameMessage(type: number, update: Uint8Array) {
+    const message = new Uint8Array(update.byteLength + 1);
+
+    message[0] = type;
+    message.set(update, 1);
+
+    return message;
+}
+
+async function ensureRoomExists(roomId: string) {
+    await pool.query(
+        `
+          INSERT INTO rooms (id)
+          VALUES ($1)
+          ON CONFLICT (id) DO NOTHING
+        `,
+        [roomId],
+    );
+}
+
+async function insertUpdate(room_id: string, data: Uint8Array) {
+    await pool.query(
+        `
+          INSERT INTO document_updates (room_id, update_data)
+          VALUES ($1, $2)
+        `,
+        [room_id, Buffer.from(data)]
+    );
 }
 
 startServer().catch((error) => {
