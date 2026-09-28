@@ -3,8 +3,19 @@ import * as Y from "yjs";
 
 const DOCUMENT_UPDATE = 0;
 
-const clientCount = Number(process.argv[2] ?? 10);
-const roomId = `load-test-${Date.now()}`;
+const clientCount = Number(process.argv[2] ?? 11);
+
+const targetClientCount = 10;
+
+if (!Number.isInteger(clientCount) ||
+    clientCount <= targetClientCount) {
+    throw new Error(`clientCount must be greater than ${targetClientCount}`);
+}
+
+const backgroundClientCount = clientCount - targetClientCount;
+
+const targetRoomId = `target-room-${Date.now()}`
+const backgroundRoomId = `background-room-${Date.now()}`;
 
 const writerDoc = new Y.Doc();
 const writerText = writerDoc.getText("code");
@@ -37,12 +48,23 @@ function connect(roomId: string) {
 }
 
 async function main() {
-    const writer = await connect(roomId);
+    const writer = await connect(targetRoomId);
+
     const observers = await Promise.all(
-        Array.from({ length: clientCount - 1 }, () => connect(roomId)),
+        Array.from({ length: targetClientCount - 1 }, () => connect(targetRoomId)),
     );
 
-    const clients = [writer, ...observers];
+    const backgroundSeed = await connect(backgroundRoomId);
+    const backgroundClients = await Promise.all(
+        Array.from({ length: backgroundClientCount - 1 }, () => connect(backgroundRoomId))
+    )
+
+    const clients = [
+        writer,
+        ...observers,
+        backgroundSeed,
+        ...backgroundClients
+    ];
 
     writerDoc.on("update", (update) => {
         writer.send(frameMessage(DOCUMENT_UPDATE, update));
@@ -72,6 +94,8 @@ async function main() {
 
     console.log({
         clientCount,
+        targetClientCount,
+        backgroundClientCount,
         averageDeliveryMs: average,
         p50DeliveryMs: p50,
         p95DeliveryMs: p95,
