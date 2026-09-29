@@ -15,7 +15,7 @@ import * as Y from "yjs";
 const DOCUMENT_UPDATE = 0;
 const AWARENESS_UPDATE = 1;
 
-type Room = {
+type DocumentSession = {
     doc: Y.Doc;
     awareness: Awareness;
 };
@@ -26,8 +26,8 @@ type AwarenessChange = {
     removed: number[];
 };
 
-const rooms = new Map<string, Room>();
-const clientRooms = new Map<Websocket, string>();
+const documents = new Map<string, DocumentSession>();
+const clientFiles = new Map<Websocket, string>();
 const socketAwarenessIDs = new Map<Websocket, Set<number>>();
 
 async function startServer() {
@@ -207,10 +207,10 @@ async function startServer() {
             return;
         }
 
-        const room = await getRoom(fileId);
-        const serverDoc = room.doc;
+        const document = await getDocument(fileId);
+        const serverDoc = document.doc;
 
-        clientRooms.set(socket, fileId);
+        clientFiles.set(socket, fileId);
 
         const trackAwarenessUpdate = (
             { added, updated, removed }: AwarenessChange,
@@ -233,18 +233,18 @@ async function startServer() {
             socketAwarenessIDs.set(socket, clientIDs);
         }
 
-        room.awareness.on("update", trackAwarenessUpdate);
+        document.awareness.on("update", trackAwarenessUpdate);
 
         const currentState = Y.encodeStateAsUpdate(serverDoc);
 
         socket.send(frameMessage(DOCUMENT_UPDATE, currentState));
         
-        const awarenessClientIDs = [...room.awareness.getStates().keys()]
-        .filter((clientID) => clientID !== room.awareness.clientID);
+        const awarenessClientIDs = [...document.awareness.getStates().keys()]
+        .filter((clientID) => clientID !== document.awareness.clientID);
 
         if (awarenessClientIDs.length > 0) {
             const currentAwareness = encodeAwarenessUpdate(
-                room.awareness,
+                document.awareness,
                 awarenessClientIDs,
             );
             
@@ -269,12 +269,12 @@ async function startServer() {
             }
 
             if (type === AWARENESS_UPDATE) {
-                applyAwarenessUpdate(room.awareness, update, socket);
+                applyAwarenessUpdate(document.awareness, update, socket);
             }
 
             for (const client of wss.clients) {
                 if (client !== socket &&
-                    clientRooms.get(client) === fileId &&
+                    clientFiles.get(client) === fileId &&
                     client.readyState === Websocket.OPEN
                 ) {
                     client.send(message);
@@ -284,17 +284,17 @@ async function startServer() {
 
         socket.on("close", () => {
             const clientIDs = socketAwarenessIDs.get(socket);
-            room.awareness.off("update", trackAwarenessUpdate);
+            document.awareness.off("update", trackAwarenessUpdate);
 
             if (clientIDs) {
                 removeAwarenessStates(
-                    room.awareness,
+                    document.awareness,
                     [...clientIDs],
                     socket,
                 )
 
                 const update = encodeAwarenessUpdate(
-                    room.awareness,
+                    document.awareness,
                     [...clientIDs],
                 );
 
@@ -303,7 +303,7 @@ async function startServer() {
                 for (const client of wss.clients) {
                     if (
                         client !== socket &&
-                        clientRooms.get(client) === fileId &&
+                        clientFiles.get(client) === fileId &&
                         client.readyState === Websocket.OPEN
                     ) {
                         client.send(message);
@@ -311,7 +311,7 @@ async function startServer() {
                 }
             }
             socketAwarenessIDs.delete(socket);
-            clientRooms.delete(socket);
+            clientFiles.delete(socket);
             console.log("Client  disconnected");
         });
     });
@@ -322,11 +322,11 @@ async function startServer() {
     })
 }
 
-async function getRoom(fileId: string): Promise<Room> {
-    const existingRoom = rooms.get(fileId);
+async function getDocument(fileId: string): Promise<DocumentSession> {
+    const existingDocument = documents.get(fileId);
 
-    if (existingRoom) {
-        return existingRoom;
+    if (existingDocument) {
+        return existingDocument;
     }
 
     const doc = new Y.Doc();
@@ -345,14 +345,14 @@ async function getRoom(fileId: string): Promise<Room> {
         Y.applyUpdate(doc, new Uint8Array(row.update_data), "database");
     }
 
-    const room = {
+    const document = {
         doc,
         awareness: new Awareness(doc),
     }
 
-    rooms.set(fileId, room);
+    documents.set(fileId, document);
 
-    return room;
+    return document;
 }
 
 function frameMessage(type: number, update: Uint8Array) {

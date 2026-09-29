@@ -20,7 +20,7 @@ type AwarenessChange = {
   removed: number[];
 };
 
-function RoomEditor({ fileId }: { fileId: string }) {
+function FileEditor({ fileId }: { fileId: string }) {
   const socketRef = useRef<WebSocket | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
@@ -203,4 +203,4 @@ function frameMessage(type: number, update: Uint8Array) {
   return message;
 }
 
-export default RoomEditor;
+export default FileEditor;
