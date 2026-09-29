@@ -3,9 +3,9 @@ import Lobby from "./components/Lobby";
 
 function App() {
     const url = new URLSearchParams(window.location.search);
-    const roomId = url.get("room");
+    const fileId = url.get("file");
 
-    return roomId ? <RoomEditor roomId={String(roomId)} /> : <Lobby />;
+    return fileId ? <RoomEditor fileId={String(fileId)} /> : <Lobby />;
 }
 
 export default App;

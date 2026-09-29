@@ -39,3 +39,16 @@ export async function listFiles(projectId: string): Promise<File[]> {
 
     return result.rows;
 }
+
+export async function getFile(fileId: string): Promise<File | null> {
+    const result = await pool.query<File>(
+        `
+            SELECT id, project_id, name, language, created_at
+            FROM files
+            WHERE id = $1
+        `,
+        [fileId],
+    );
+
+    return result.rows[0] ?? null;
+}

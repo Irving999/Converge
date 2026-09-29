@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { pool } from "./db";
-import { createFile, listFiles } from "./files";
+import { createFile, listFiles, getFile } from "./files";
 import { createServer , IncomingMessage } from "node:http";
 import { createProject, listProjects } from "./projects";
 import Websocket, { WebSocketServer } from "ws";
@@ -161,11 +161,22 @@ async function startServer() {
             "http://localhost:8080"
         );
 
-        const roomID = String(url.searchParams.get("room"));
-        const room = await getRoom(roomID);
+        const fileId = url.searchParams.get("file");
+
+        if (!fileId) {
+            socket.close(1008, "A file ID is required");
+            return;
+        }
+
+        if (!(await getFile(fileId))) {
+            socket.close(1008, "File not found");
+            return;
+        }
+
+        const room = await getRoom(fileId);
         const serverDoc = room.doc;
 
-        clientRooms.set(socket, roomID);
+        clientRooms.set(socket, fileId);
 
         const trackAwarenessUpdate = (
             { added, updated, removed }: AwarenessChange,
@@ -215,7 +226,7 @@ async function startServer() {
 
             if (type === DOCUMENT_UPDATE) {
                 try {
-                    await insertUpdate(roomID, update);
+                    await insertUpdate(fileId, update);
                     Y.applyUpdate(serverDoc, update);
                 } catch (error) {
                     console.error("Failed to save document changes", error);
@@ -229,7 +240,7 @@ async function startServer() {
 
             for (const client of wss.clients) {
                 if (client !== socket &&
-                    clientRooms.get(client) === roomID &&
+                    clientRooms.get(client) === fileId &&
                     client.readyState === Websocket.OPEN
                 ) {
                     client.send(message);
@@ -258,7 +269,7 @@ async function startServer() {
                 for (const client of wss.clients) {
                     if (
                         client !== socket &&
-                        clientRooms.get(client) === roomID &&
+                        clientRooms.get(client) === fileId &&
                         client.readyState === Websocket.OPEN
                     ) {
                         client.send(message);
@@ -277,14 +288,12 @@ async function startServer() {
     })
 }
 
-async function getRoom(roomID: string): Promise<Room> {
-    const existingRoom = rooms.get(roomID);
+async function getRoom(fileId: string): Promise<Room> {
+    const existingRoom = rooms.get(fileId);
 
     if (existingRoom) {
         return existingRoom;
     }
-
-    await ensureRoomExists(roomID);
 
     const doc = new Y.Doc();
 
@@ -292,10 +301,10 @@ async function getRoom(roomID: string): Promise<Room> {
         `
           SELECT update_data
           FROM document_updates
-          WHERE room_id = $1
+          WHERE file_id = $1
           ORDER BY id ASC 
         `,
-        [roomID],
+        [fileId],
     );
 
     for (const row of result.rows) {
@@ -307,7 +316,7 @@ async function getRoom(roomID: string): Promise<Room> {
         awareness: new Awareness(doc),
     }
 
-    rooms.set(roomID, room);
+    rooms.set(fileId, room);
 
     return room;
 }
@@ -321,24 +330,13 @@ function frameMessage(type: number, update: Uint8Array) {
     return message;
 }
 
-async function ensureRoomExists(roomId: string) {
+async function insertUpdate(fileId: string, data: Uint8Array) {
     await pool.query(
         `
-          INSERT INTO rooms (id)
-          VALUES ($1)
-          ON CONFLICT (id) DO NOTHING
-        `,
-        [roomId],
-    );
-}
-
-async function insertUpdate(room_id: string, data: Uint8Array) {
-    await pool.query(
-        `
-          INSERT INTO document_updates (room_id, update_data)
+          INSERT INTO document_updates (file_id, update_data)
           VALUES ($1, $2)
         `,
-        [room_id, Buffer.from(data)]
+        [fileId, Buffer.from(data)]
     );
 }
 

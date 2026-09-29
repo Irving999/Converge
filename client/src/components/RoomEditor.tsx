@@ -19,7 +19,7 @@ type AwarenessChange = {
   removed: number[];
 };
 
-function RoomEditor({ roomId }: { roomId: string }) {
+function RoomEditor({ fileId }: { fileId: string }) {
   const socketRef = useRef<WebSocket | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
@@ -71,7 +71,7 @@ function RoomEditor({ roomId }: { roomId: string }) {
     updateAwarenessStyles();
 
     const socket = new WebSocket(
-      `ws://localhost:8080?room=${encodeURIComponent(roomId)}`
+      `ws://localhost:8080?file=${encodeURIComponent(fileId)}`
     )
 
     socket.binaryType = "arraybuffer";
@@ -135,7 +135,7 @@ function RoomEditor({ roomId }: { roomId: string }) {
       socket.close();
       doc.destroy();
     };
-  }, [roomId]);
+  }, [fileId]);
 
   useEffect(() => {
     if (!editorInstance || !docRef.current) {
