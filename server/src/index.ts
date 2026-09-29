@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { pool } from "./db";
 import { createServer , IncomingMessage } from "node:http";
-import { createProject } from "./projects";
+import { createProject, listProjects } from "./projects";
 import Websocket, { WebSocketServer } from "ws";
 import {
     Awareness,
@@ -63,7 +63,20 @@ async function startServer() {
                 });
                 response.end(JSON.stringify({ error: "Failed to create project" }));
             }
-    }
+
+            return;
+        }
+
+        if (request.method === "GET" && request.url === "/api/projects") {
+            const projects = await listProjects();
+
+            response.writeHead(200, {
+                "Content-Type": "application/json",
+            });
+            response.end(JSON.stringify(projects));
+            return;
+        }
+        
         response.writeHead(404);
         response.end();
     });
