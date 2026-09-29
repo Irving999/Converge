@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { pool } from "./db";
+import { createServer , IncomingMessage } from "node:http";
+import { createProject } from "./projects";
 import Websocket, { WebSocketServer } from "ws";
 import {
     Awareness,
@@ -28,9 +30,45 @@ const clientRooms = new Map<Websocket, string>();
 const socketAwarenessIDs = new Map<Websocket, Set<number>>();
 
 async function startServer() {
-    const wss = new WebSocketServer({
-        port: 8080,
+    const server = createServer(async (request, response) => {
+        if (request.method === "POST" && request.url === "/api/projects") {
+            try {
+                const body = await readJsonBody(request);
+
+                if (
+                    typeof body !== "object" ||
+                    body === null ||
+                    !("name" in body) ||
+                    typeof body.name !== "string" ||
+                    body.name.trim() === ""
+                ) {
+                    response.writeHead(400, {
+                        "Content-Type": "application/json",
+                    });
+                    response.end(JSON.stringify({ error: "A project name is required" }));
+                    return;
+                }
+
+                const project = await createProject(body.name.trim());
+
+                response.writeHead(201, {
+                    "Content-Type": "application/json",
+                });
+                response.end(JSON.stringify(project));
+            } catch (error) {
+                console.error("Failed to create project", error);
+
+                response.writeHead(500, {
+                    "Content-Type": "application/json",
+                });
+                response.end(JSON.stringify({ error: "Failed to create project" }));
+            }
+    }
+        response.writeHead(404);
+        response.end();
     });
+
+    const wss = new WebSocketServer({ server });
 
     wss.on("connection", async (socket, request) => {
         console.log("Client connected");
@@ -150,7 +188,10 @@ async function startServer() {
         });
     });
 
-    console.log("Server running on ws://localhost:8080");
+    server.listen(8080, () => {
+        console.log("Server running on http://localhost:8080");
+        console.log("Websocket server running on ws://localhost:8080");
+    })
 }
 
 async function getRoom(roomID: string): Promise<Room> {
@@ -216,6 +257,16 @@ async function insertUpdate(room_id: string, data: Uint8Array) {
         `,
         [room_id, Buffer.from(data)]
     );
+}
+
+async function readJsonBody(request: import("node:http").IncomingMessage) {
+    const chunks: Buffer[] = [];
+
+    for await (const chunk of request) {
+        chunks.push(Buffer.from(chunk));
+    }
+
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
 startServer().catch((error) => {
