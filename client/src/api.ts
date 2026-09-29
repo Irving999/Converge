@@ -67,3 +67,13 @@ export async function getFiles(projectId: string): Promise<File[]> {
 
     return response.json();
 }
+
+export async function getFile(fileId: string): Promise<File> {
+    const response = await fetch(`api/files/${fileId}`);
+
+    if (!response.ok) {
+        throw new Error("Failed to load file");
+    }
+
+    return response.json();
+}

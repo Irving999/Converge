@@ -146,6 +146,40 @@ async function startServer() {
             response.end(JSON.stringify(files));
             return;
         }
+
+        const fileRoute = url.pathname.match(
+            /^\/api\/files\/([^/]+)$/,
+        );
+
+        if (request.method === "GET" && fileRoute) {
+            const fileId = decodeURIComponent(fileRoute[1]);
+
+            try {
+                const file = await getFile(fileId);
+
+                if (!file) {
+                    response.writeHead(404, {
+                        "Content-Type": "application/json",
+                    });
+                    response.end(JSON.stringify({ error: "File not found" }));
+                    return;
+                }
+
+                response.writeHead(200, {
+                    "Content-Type": "application/json",
+                });
+                response.end(JSON.stringify(file));
+            } catch (error) {
+                console.error("Failed to load file", error);
+
+                response.writeHead(500, {
+                    "Content-Type": "application/json",
+                });
+                response.end(JSON.stringify({ error: "Failed to load file" }));
+            }
+            
+            return;
+        }
         
         response.writeHead(404);
         response.end();

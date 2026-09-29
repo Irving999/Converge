@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { editor } from "monaco-editor";
+import { type File, getFile } from "../api";
 
 import * as Y from "yjs";
 import { MonacoBinding } from "y-monaco";
@@ -23,6 +24,7 @@ function RoomEditor({ fileId }: { fileId: string }) {
   const socketRef = useRef<WebSocket | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [editorInstance, setEditorInstance] =
     useState<editor.IStandaloneCodeEditor | null>(null);
 
@@ -138,6 +140,14 @@ function RoomEditor({ fileId }: { fileId: string }) {
   }, [fileId]);
 
   useEffect(() => {
+    getFile(fileId)
+      .then(setFile)
+      .catch((error) => {
+        console.error("Failed to load file", error);
+      })
+  }, [fileId])
+
+  useEffect(() => {
     if (!editorInstance || !docRef.current) {
       return;
     }
@@ -169,9 +179,11 @@ function RoomEditor({ fileId }: { fileId: string }) {
 
   return (
     <main>
+      <h2>{file?.name ?? "Loading file..."}</h2>
+
       <Editor
         height="80vh"
-        language="typescript"
+        language={file?.language ?? "plaintext"}
         theme="vs-dark"
         defaultValue=""
         onMount={(editor) => {
