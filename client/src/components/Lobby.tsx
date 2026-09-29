@@ -1,16 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+    type Project,
+    getProjects,
+    createProject,
+} from "../api";
 
 function Lobby() {
-    const [roomId, setRoomId] = useState<string>("");
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [projectName, setProjectName] = useState<string>("");
 
-    const enterRoom = () => {
-        const cleanRoomId = roomId.trim();
+    useEffect(() => {
+        getProjects()
+            .then(setProjects)
+            .catch((error) => {
+                console.error("Failed to load projects", error);
+            });
+    }, []);
 
-        if (!cleanRoomId) {
-            return;
+    const onSubmit = async () => {
+        try {
+            const project = await createProject(projectName);
+
+            setProjects((currentProjects) => [
+                project,
+                ...currentProjects,
+            ]);
+
+            setProjectName("");
+        } catch (error) {
+            console.error("Failed to create a project", error);
         }
-
-        window.location.href = `?room=${encodeURIComponent(cleanRoomId)}`;
     }
 
     return (
@@ -20,21 +39,27 @@ function Lobby() {
             <form
                 onSubmit={(event) => {
                     event.preventDefault();
-                    enterRoom();
+                    onSubmit();
                 }}
             >
-                <label htmlFor="roomId">Room ID</label>
+                <label htmlFor="projectName">Create Project: </label>
                 <input
                     type="text"
-                    name="roomId"
-                    id="roomId"
-                    value={roomId}
-                    onChange={(event) => setRoomId(event.currentTarget.value)}
-                    placeholder="Enter room id"
+                    name="projectName"
+                    id="projectName"
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.currentTarget.value)}
+                    placeholder="Enter project name"
                     required
                 />
-                <button type="submit">Enter room</button>
+                <button type="submit">Create</button>
             </form>
+
+            <ul>
+                {projects.map((project) => (
+                    <li key={project.id}>{project.name}</li>
+                ))}
+            </ul>
         </main>
 
     )
