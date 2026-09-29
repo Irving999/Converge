@@ -10,7 +10,8 @@ import {
 
 function Lobby() {
     const [projects, setProjects] = useState<Project[]>([]);
-    const [projectName, setProjectName] = useState<string>("");
+    const [projectName, setProjectName] = useState("");
+    const [fileName, setFileName] = useState("");
 
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
     const [files, setFiles] = useState<File[]>([]);
@@ -36,7 +37,7 @@ function Lobby() {
             });
     }, [selectedProjectId]);
 
-    const onSubmit = async () => {
+    const onCreateProject = async () => {
         try {
             const project = await createProject(projectName);
 
@@ -53,6 +54,28 @@ function Lobby() {
         }
     }
 
+    const onCreateFile = async () => {
+        if (!selectedProjectId) {
+            return;
+        }
+
+        try {
+            const file = await createFile(
+                selectedProjectId,
+                fileName.trim(),
+            );
+
+            setFiles((currentFiles) => [
+                ...currentFiles,
+                file,
+            ]);
+
+            setFileName("");
+        } catch (error) {
+            console.error("Failed to create file", error);
+        }
+    }
+
     return (
         <main>
             <h2>This is the lobby</h2>
@@ -60,7 +83,7 @@ function Lobby() {
             <form
                 onSubmit={(event) => {
                     event.preventDefault();
-                    onSubmit();
+                    onCreateProject();
                 }}
             >
                 <label htmlFor="projectName">Create Project: </label>
@@ -106,6 +129,25 @@ function Lobby() {
                     </li>
                 ))}
             </ul>
+
+            {selectedProjectId && (
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        onCreateFile();
+                    }}
+                >
+                    <label htmlFor="fileName">New file:</label>
+                    <input
+                        id="fileName"
+                        value={fileName}
+                        onChange={(event) => setFileName(event.currentTarget.value)}
+                        placeholder="utils.ts"
+                        required
+                    />
+                    <button type="submit">Create file</button>
+                </form>
+            )}
         </main>
 
     )
