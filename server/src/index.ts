@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { pool } from "./db";
+import { createFile, listFiles } from "./files";
 import { createServer , IncomingMessage } from "node:http";
 import { createProject, listProjects } from "./projects";
 import Websocket, { WebSocketServer } from "ws";
@@ -31,6 +32,11 @@ const socketAwarenessIDs = new Map<Websocket, Set<number>>();
 
 async function startServer() {
     const server = createServer(async (request, response) => {
+        const url = new URL(
+            request.url ?? "/",
+            "http://localhost:8080",
+        );
+        
         if (request.method === "POST" && request.url === "/api/projects") {
             try {
                 const body = await readJsonBody(request);
@@ -74,6 +80,70 @@ async function startServer() {
                 "Content-Type": "application/json",
             });
             response.end(JSON.stringify(projects));
+            return;
+        }
+
+        const filesRoute = url.pathname.match(
+            /^\/api\/projects\/([^/]+)\/files$/,
+        );
+
+        if (request.method === "POST" && filesRoute) {
+            const projectId = decodeURIComponent(filesRoute[1]);
+
+            try {
+                const body = await readJsonBody(request);
+
+                if (
+                    typeof body !== "object" ||
+                    body === null ||
+                    !("name" in body) ||
+                    typeof body.name !== "string" ||
+                    body.name.trim() === ""
+                ) {
+                    response.writeHead(400, {
+                        "Content-Type": "application/json",
+                    });
+                    response.end(JSON.stringify({ error: "A file name is required" }));
+                    return;
+                }
+
+                const language =
+                    "language" in body &&
+                    typeof body.language === "string" &&
+                    body.language.trim() !== ""
+                        ? body.language.trim()
+                        : "typescript";
+
+                const file = await createFile(
+                    projectId,
+                    body.name.trim(),
+                    language,
+                );
+
+                response.writeHead(201, {
+                    "Content-Type": "application/json",
+                });
+                response.end(JSON.stringify(file));
+            } catch (error) {
+                console.error("Failed to create file", error);
+
+                response.writeHead(500, {
+                    "Content-Type": "application/json",
+                });
+                response.end(JSON.stringify({ error: "Failed to create file" }));
+            }
+
+            return;
+        }
+
+        if (request.method === "GET" && filesRoute) {
+            const projectId = decodeURIComponent(filesRoute[1]);
+            const files = await listFiles(projectId);
+
+            response.writeHead(200, {
+                "Content-Type": "application/json",
+            });
+            response.end(JSON.stringify(files));
             return;
         }
         
@@ -272,7 +342,7 @@ async function insertUpdate(room_id: string, data: Uint8Array) {
     );
 }
 
-async function readJsonBody(request: import("node:http").IncomingMessage) {
+async function readJsonBody(request: IncomingMessage) {
     const chunks: Buffer[] = [];
 
     for await (const chunk of request) {
